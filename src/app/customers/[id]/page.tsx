@@ -13,7 +13,6 @@ interface PageProps {
 export default async function CustomerPage({ params }: PageProps) {
     const { id } = await params;
     // id is now the domain because of the folder structure [id], effectively it captures the path segment.
-    // We should treat it as 'domain'.
 
     // Fetch customer
     const { data: customer, error: customerError } = await supabase
@@ -27,28 +26,39 @@ export default async function CustomerPage({ params }: PageProps) {
         notFound();
     }
 
-    // Fetch rule groups with nested rules
-    const { data: groups, error: groupsError } = await supabase
-        .from('rule_groups')
-        .select(`
-            *,
-            rules (*)
-        `)
-        .eq('customer_domain', id)
-        .order('priority', { ascending: true }); // Groups ordered by priority (if we add priority to groups, currently schema has it)
+    // Parallel fetching for performance
+    const [groupsRes, motionsRes, routingRulesRes] = await Promise.all([
+        supabase
+            .from('rule_groups')
+            .select(`*, rules (*)`)
+            .eq('customer_domain', id)
+            .order('priority', { ascending: true }),
+        supabase
+            .from('gtm_motions')
+            .select('*')
+            .eq('customer_domain', id)
+            .order('created_at', { ascending: true }),
+        supabase
+            .from('form_routing_rules')
+            .select(`
+                *,
+                gtm_motion:gtm_motions(name)
+            `)
+            .eq('customer_domain', id)
+            .order('priority', { ascending: false }), // Highest priority first
+    ]);
 
-    if (groupsError) {
-        console.error('Error fetching groups:', groupsError);
-    }
-
-    // Transform null rules to empty array if needed, but Supabase returns empty array for left join usually
-    // However, if the join returns null for rules it might be an issue, but standard Supabase select rules(*) returns [] if empty.
+    if (groupsRes.error) console.error('Error fetching groups:', groupsRes.error);
+    if (motionsRes.error) console.error('Error fetching motions:', motionsRes.error);
+    if (routingRulesRes.error) console.error('Error fetching routing rules:', routingRulesRes.error);
 
     return (
         <main className="min-h-screen bg-slate-50 p-4 dark:bg-slate-900">
             <CustomerDetail
                 customer={customer as Customer}
-                initialGroups={(groups as unknown as RuleGroupWithRules[]) || []}
+                initialGroups={(groupsRes.data as unknown as RuleGroupWithRules[]) || []}
+                initialMotions={(motionsRes.data as any[]) || []}
+                initialRoutingRules={(routingRulesRes.data as any[]) || []}
             />
         </main>
     );

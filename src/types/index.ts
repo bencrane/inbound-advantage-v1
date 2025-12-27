@@ -33,3 +33,30 @@ export interface RuleGroup {
     priority: number;
     created_at: string;
 }
+
+export interface GtmMotion {
+    id: string;
+    customer_domain: string;
+    name: string;
+    booking_url?: string;
+    redirect_slug?: string;
+    messaging?: string;
+    created_at: string;
+}
+
+export interface FormRoutingRule {
+    id: string;
+    customer_domain: string;
+    name?: string;
+    scope: 'company' | 'person';
+    size_min?: number;
+    size_max?: number;
+    country?: string;
+    company_type?: string;
+    is_hot_account?: boolean;
+    gtm_motion_id: string;
+    priority: number;
+    created_at: string;
+    // Joined fields
+    gtm_motion?: GtmMotion;
+}
